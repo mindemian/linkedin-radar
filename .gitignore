@@ -1,0 +1,8 @@
+node_modules
+.next
+.env
+.env.local
+*.tsbuildinfo
+next-env.d.ts
+# Fixtures are generated, never committed. No personal data in git.
+/fixtures/
