@@ -26,7 +26,7 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 const pick = <T,>(a: T[], i: number) => a[i % a.length];
 
 // --- Connections.csv -------------------------------------------------------
-const N_CONN = 120;
+const N_CONN = 400;
 const connLines: string[] = [];
 const profileUrls: string[] = [];
 
@@ -67,7 +67,7 @@ const MESSAGES = [
   "WIN A FREE IPHONE CLICK HERE NOW!!!",
   "We met at the conference last year, good to reconnect.",
 ];
-const N_INV = 80;
+const N_INV = 200;
 const invLines: string[] = [];
 
 for (let i = 0; i < N_INV; i++) {
