@@ -12,7 +12,7 @@ import {
 import { normalizeProfileUrl } from '../lib/parse/urls';
 import { parseConnectedOn, parseSentAt } from '../lib/parse/dates';
 import { validateQuestions, hasBlockingError } from '../lib/spec/validate';
-import { tierFor, countTiers, DEFAULT_THRESHOLDS, type TierInput } from '../lib/tiers';
+import { tierFor, countTiers, sizeFit, finalRank, DEFAULT_THRESHOLDS, type TierInput } from '../lib/tiers';
 import type { QuestionSpec } from '../lib/spec/types';
 
 let pass = 0;
@@ -91,8 +91,8 @@ check('No signal is sorted by recency',
     i === 0 || (noSignal[i - 1].sentAt?.getTime() ?? 0) >= (r.sentAt?.getTime() ?? 0)));
 
 console.log('\nTIERS');
-const TARGET = ['chief_of_staff', 'coo', 'ceo_or_president', 'owner_or_md'];
-const PREFERRED = ['manufacturing', 'distribution', 'construction', 'logistics'];
+const TARGET = ['executive_director', 'development_or_fundraising', 'founder_or_owner'];
+const PREFERRED = ['nonprofit_or_charity', 'social_enterprise', 'startup_or_sme'];
 const base = { targetRoles: TARGET, preferredIndustries: PREFERRED };
 
 const emptyPositionRow: TierInput = {
@@ -106,7 +106,10 @@ check('an empty Position resolves to Tier 2, never Rejected',
 const strongRow: TierInput = {
   ...base, positionEmpty: false,
   answers: {
-    role: { type: 'choice', choice: 'coo', confidence: 0.92, probabilities: { coo: 0.92 } },
+    role: {
+      type: 'choice', choice: 'executive_director', confidence: 0.92,
+      probabilities: { executive_director: 0.92 },
+    },
     disqualified: { type: 'noul', noul: 0.02 },
     is_big_public_brand: { type: 'noul', noul: 0.1 },
     likely_private_or_family: { type: 'noul', noul: 0.8 },
@@ -130,6 +133,24 @@ const after = countTiers(rows, { ...DEFAULT_THRESHOLDS, roleConfidenceTier1: 0.9
 check('moving a threshold re-tiers from stored answers with no Jev call',
   before.tier1 === 1 && after.tier1 === 0,
   `tier1 ${before.tier1} -> ${after.tier1}`);
+
+console.log('\nSIZE IS A BAND, NOT A CEILING');
+check('a mid-sized organization fits best', sizeFit(2) === 1);
+check('a very large organization fits worst', sizeFit(4) === 0);
+check('a very small organization fits worst too', sizeFit(0) === 0);
+const multinational = {
+  in_geography: { type: 'noul', noul: 0.95 },
+  decision_maker: { type: 'noul', noul: 0.95 },
+  organization_scale: { type: 'score', score: 4, confidence: 0.9, probabilities: {} },
+} as Record<string, import('../lib/spec/types').Answer>;
+const midsizeCharity = {
+  in_geography: { type: 'noul', noul: 0.95 },
+  decision_maker: { type: 'noul', noul: 0.95 },
+  organization_scale: { type: 'score', score: 2, confidence: 0.9, probabilities: {} },
+} as Record<string, import('../lib/spec/types').Answer>;
+check('a multinational does not outrank a mid-sized charity',
+  finalRank(midsizeCharity) > finalRank(multinational),
+  `charity ${finalRank(midsizeCharity).toFixed(2)} vs multinational ${finalRank(multinational).toFixed(2)}`);
 
 console.log('\nSPEC VALIDATION');
 const good: QuestionSpec = {

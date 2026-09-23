@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+/* Editorial: a serif headline, small uppercase labels, black and white, one
+   accent. The accent is the only colour that carries meaning, so Tier 1 reads
+   at a glance in a grid of a thousand tiles. */
+:root {
+  --paper: #fbfbf9;
+  --ink: #121212;
+  --muted: #6b6b6b;
+  --rule: #e2e2dd;
+  --accent: #c8452b;
+  --panel: #ffffff;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --paper: #0e0e0e;
+  --ink: #f2f0ec;
+  --muted: #9a9a95;
+  --rule: #272725;
+  --accent: #ff6a4d;
+  --panel: #161615;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e0e0e;
+    --ink: #f2f0ec;
+    --muted: #9a9a95;
+    --rule: #272725;
+    --accent: #ff6a4d;
+    --panel: #161615;
+    color-scheme: dark;
+  }
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.serif {
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, ui-serif, serif;
+  letter-spacing: -0.02em;
+}
+
+.label {
+  font-size: 0.625rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.rule { border-color: var(--rule); }
+.panel { background: var(--panel); border: 1px solid var(--rule); }
+
+/* Thin probability bar. Deliberately 3px: a hundred of these stack without
+   turning the panel into a chart. */
+.bar { height: 3px; background: var(--rule); position: relative; overflow: hidden; }
+.bar > span { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
+.bar.neutral > span { background: var(--ink); opacity: 0.55; }
+
+/* Tier colour is the whole legend of the avatar grid. */
+.t1 { background: var(--accent); color: #fff; }
+.t2 { background: var(--ink); color: var(--paper); }
+.t3 { background: var(--rule); color: var(--muted); }
+.trej { background: transparent; color: var(--muted); opacity: 0.35; border: 1px dashed var(--rule); }
+.tpending { background: transparent; color: var(--muted); border: 1px solid var(--rule); }

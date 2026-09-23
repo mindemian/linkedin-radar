@@ -99,15 +99,29 @@ export function invitationBucketFor(
   return 'review';
 }
 
-/** Final ranking after enrichment: decision-maker times revenue, geography first. */
+/**
+ * Final ranking after enrichment: geography first, then decision-maker times
+ * size fit.
+ *
+ * Size is read as a BAND, not a ceiling. This ICP sells grant writing: a
+ * nonprofit is a better fit the smaller it is, and a business needs enough
+ * scale to deliver a funded project but must not be a multinational. So the
+ * middle of the five-level scale scores 1 and both ends score 0. Treating the
+ * scale as "bigger is better" would rank exactly the multinationals the ICP
+ * disqualifies straight to the top.
+ */
+export function sizeFit(score: number, levels = 5): number {
+  const middle = (levels - 1) / 2;
+  return 1 - Math.abs(score - middle) / middle;
+}
+
 export function finalRank(answers: Record<string, Answer>): number {
   const decisionMaker = noulOf(answers.decision_maker);
-  const revenue = answers.revenue_over_threshold;
-  const revenueScore =
-    revenue && revenue.type === 'score' ? revenue.score / Math.max(1, 4) : 0.5;
+  const scale = answers.organization_scale;
+  const fit = scale && scale.type === 'score' ? sizeFit(scale.score) : 0.5;
   const inGeo = noulOf(answers.in_geography);
   // Geography leads, then the product of the two continuous signals.
-  return inGeo * 10 + decisionMaker * revenueScore;
+  return inGeo * 10 + decisionMaker * fit;
 }
 
 export function countTiers(
