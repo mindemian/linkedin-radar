@@ -8,39 +8,31 @@
  * rather than passing silently, so an empty default set is never mistaken for
  * a clean one.
  */
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
-
-const DEFAULTS = resolve(process.cwd(), 'lib/questions.defaults.ts');
+import { PRESETS } from '../lib/presets';
+import { validateQuestions } from '../lib/spec/validate';
 
 async function main() {
-  if (!existsSync(DEFAULTS)) {
-    console.log('check-contract: no default question set yet (lib/questions.defaults.ts).');
-    console.log('check-contract: nothing to verify. Build continues.');
-    return;
+  let failed = 0;
+
+  for (const preset of PRESETS) {
+    const all = validateQuestions(preset.questions);
+    const errors = all.filter((e) => e.severity === 'error');
+    for (const w of all.filter((e) => e.severity === 'warning')) {
+      console.warn(`check-contract: warning  ${preset.id}/${w.questionId}: ${w.message}`);
+    }
+    if (errors.length > 0) {
+      failed += errors.length;
+      console.error(`\ncheck-contract: preset "${preset.id}" breaks the field contract.\n`);
+      for (const e of errors) {
+        console.error(`  ${e.questionId}${e.field ? ` [${e.field}]` : ''}: ${e.message}`);
+      }
+      console.error('');
+    } else {
+      console.log(`check-contract: ${preset.id} — ${preset.questions.length} questions, all inside the contract.`);
+    }
   }
 
-  // Resolved through a variable so the typechecker does not demand the module
-  // before the ICP exists and it has been written.
-  const defaultsPath = '../lib/questions.defaults.ts';
-  const { DEFAULT_QUESTIONS } = (await import(defaultsPath)) as {
-    DEFAULT_QUESTIONS: import('../lib/spec/types').QuestionSpec[];
-  };
-  const { validateQuestions } = await import('../lib/spec/validate');
-
-  const errors = validateQuestions(DEFAULT_QUESTIONS).filter((e) => e.severity === 'error');
-  const warnings = validateQuestions(DEFAULT_QUESTIONS).filter((e) => e.severity === 'warning');
-
-  for (const w of warnings) console.warn(`check-contract: warning  ${w.questionId}: ${w.message}`);
-
-  if (errors.length > 0) {
-    console.error('\ncheck-contract: the shipped default questions break the field contract.\n');
-    for (const e of errors) console.error(`  ${e.questionId}${e.field ? ` [${e.field}]` : ''}: ${e.message}`);
-    console.error('');
-    process.exit(1);
-  }
-
-  console.log(`check-contract: ${DEFAULT_QUESTIONS.length} default questions, all inside the contract.`);
+  if (failed > 0) process.exit(1);
 }
 
 main().catch((err) => {

@@ -1,76 +1,101 @@
 /**
- * THE ICP. One file. Every default question's options and criteria are derived
- * from what is written here, so changing your targeting is an edit to this file
- * and nothing else. Re-run `npm run build` afterwards: the contract check
- * confirms the derived questions still hold.
+ * THE TWO ICPs. One file.
+ *
+ * Mina is running two different searches over the same LinkedIn network, and
+ * they want opposite things from the same person. A funder is a great contact
+ * for the job search and a non-customer for the client search; a small charity
+ * with no fundraiser is the reverse. Keeping them as one ICP would make every
+ * tier mean two things at once, so they are two presets and you switch between
+ * them in the app.
+ *
+ * Editing your targeting is an edit to this file. Re-run `npm run build`
+ * afterwards: the contract check validates every shipped preset.
  */
 
-export const ICP = {
-  company: 'Grant writing services for nonprofits, charities and grant-seeking businesses.',
+// ---------------------------------------------------------------------------
+// 1. GRANT CLIENTS — the default
+// ---------------------------------------------------------------------------
+
+export const GRANT_CLIENTS_ICP = {
+  company:
+    'Project-based grant writing for organizations that need grants and do not have ' +
+    'the in-house capacity to write them.',
 
   /**
-   * Mina's answer was "grant writing required" — a need, not a list of titles.
-   * These are the titles that signal that need, which is what a LinkedIn
-   * Position field can actually show.
+   * Mina asked for "grant writing required" — a need, not a title. These are
+   * the titles that evidence that need, because a Position field can show a
+   * title and cannot show a need.
+   *
+   * The ordering matters. `development_or_fundraising` is a target, but holding
+   * that title proves the organization already has fundraising capacity, which
+   * is the thing Mina is selling. So it ranks below a small-shop executive
+   * director who has nobody.
    */
-  targetRoles: [
-    { id: 'executive_director', label: 'Executive Director or nonprofit CEO' },
-    { id: 'development_or_fundraising', label: 'Development, fundraising or advancement lead' },
-    { id: 'founder_or_owner', label: 'Founder or owner of a grant-seeking business' },
-    { id: 'program_or_operations_lead', label: 'Program or operations lead at a nonprofit' },
-    { id: 'grants_or_funding_role', label: 'Grants or funding role' },
-  ],
+  primeRoles: ['executive_director', 'founder_or_owner', 'program_or_operations_lead'],
+  secondaryRoles: ['development_or_fundraising', 'board_or_volunteer_fundraiser'],
 
   geography: 'Calgary first, then Alberta, then the rest of Canada, then the United States.',
 
-  /**
-   * Nonprofits and big educational institutions sit on opposite sides of this
-   * ICP, so they are separate options in `company_type`. Folding them together,
-   * as the generic version does, would make the single most important
-   * distinction in this list unscoreable.
-   */
-  preferredIndustries: [
-    { id: 'nonprofit_or_charity', label: 'Nonprofit, charity or foundation' },
-    { id: 'social_enterprise', label: 'Social enterprise or community organization' },
-    { id: 'startup_or_sme', label: 'Startup or small-to-medium business seeking grants' },
-    { id: 'health_or_social_services', label: 'Health, social services or housing' },
-    { id: 'arts_culture_or_recreation', label: 'Arts, culture, sport or recreation' },
-  ],
-
   companyProfile:
-    'Nonprofits and registered charities of any size, smaller ones preferred. ' +
-    'Medium to large businesses when the fit is startup or innovation grants.',
+    'Nonprofits and registered charities of any size, smaller preferred. Community ' +
+    'groups, social enterprises and arts organizations. Startups and small businesses ' +
+    'going after innovation or startup grants.',
+
+  sizeGuidance:
+    'For nonprofits, smaller is a better fit — they are the ones without a fundraising ' +
+    'department. For businesses, large enough to deliver a funded project but not a ' +
+    'multinational.',
 
   /**
-   * Not a simple ceiling. A nonprofit is a better fit the smaller it is; a
-   * business needs enough scale to run a funded project. The `organization_scale`
-   * question reads as a band, not a threshold — see questions.defaults.ts.
+   * An allowlist, not a blocklist. Mina: "everyone else should be disqualified."
+   * The gate is `organization_seeks_grants`; anything failing it is Rejected.
+   * These two are named because they are the common false positives.
    */
-  sizeGuidance:
-    'For nonprofits, smaller is a better fit. For businesses, large enough to ' +
-    'deliver a funded project but not a multinational.',
-
-  disqualifiers: [
+  neverTier1: [
     'large multinational corporations',
     'big educational institutions such as universities and large school boards',
+    'funders and grantmakers — worth talking to, but a separate conversation',
   ],
 } as const;
 
-export const TARGET_ROLE_IDS = ICP.targetRoles.map((r) => r.id);
-export const PREFERRED_INDUSTRY_IDS = ICP.preferredIndustries.map((i) => i.id);
+export const PRIME_ROLE_IDS = GRANT_CLIENTS_ICP.primeRoles as readonly string[];
+export const SECONDARY_ROLE_IDS = GRANT_CLIENTS_ICP.secondaryRoles as readonly string[];
+
+// ---------------------------------------------------------------------------
+// 2. INNOVATION ROLES — Mina's own job search
+// ---------------------------------------------------------------------------
+
+export const INNOVATION_ROLES_ICP = {
+  goal:
+    'A full-time Director of Innovation or equivalent: director or executive-director ' +
+    'level, with an innovation, ecosystem or strategy mandate.',
+
+  geography: 'Calgary first, then Alberta, then the rest of Canada, then remote-friendly roles elsewhere.',
+
+  /** Who is worth a conversation. Not customers — people near hiring decisions. */
+  whoMatters:
+    'People who run innovation mandates, ecosystem and accelerator leaders, economic ' +
+    'development officers, and senior people at organizations that hire for this kind ' +
+    'of role. Recruiters count here, unlike in the client search.',
+} as const;
+
 export const SENIOR_BUCKETS = ['c_level_or_owner', 'director_or_vp'] as const;
 
-export function icpAsText(): string {
+export function grantClientsIcpText(): string {
+  const i = GRANT_CLIENTS_ICP;
   return [
-    `Company: ${ICP.company}`,
-    `Target roles: ${ICP.targetRoles.map((r) => r.label).join('; ')}`,
-    `Geography: ${ICP.geography}`,
-    `Company profile: ${ICP.companyProfile}`,
-    `Size guidance: ${ICP.sizeGuidance}`,
-    `Disqualifiers: ${ICP.disqualifiers.join('; ')}`,
+    `What I sell: ${i.company}`,
+    `Prime roles: ${i.primeRoles.join(', ')}`,
+    `Secondary roles (already have fundraising capacity): ${i.secondaryRoles.join(', ')}`,
+    `Geography: ${i.geography}`,
+    `Organizations: ${i.companyProfile}`,
+    `Size: ${i.sizeGuidance}`,
+    `Never Tier 1: ${i.neverTier1.join('; ')}`,
+    `Everyone not at a plausible grant-seeking organization is Rejected.`,
   ].join('\n');
 }
 
-export function isPlaceholder(): boolean {
-  return icpAsText().includes('PLACEHOLDER');
+export function innovationRolesIcpText(): string {
+  const i = INNOVATION_ROLES_ICP;
+  return [`Goal: ${i.goal}`, `Geography: ${i.geography}`, `Who matters: ${i.whoMatters}`].join('\n');
 }

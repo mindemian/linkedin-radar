@@ -36,23 +36,34 @@ export type QuestionSpec =
       whenFalse?: string;
     };
 
-export type Thresholds = {
-  roleConfidenceTier1: number;
-  roleConfidenceTier2: number;
-  disqualifiedMax: number;
-  disqualifiedReject: number;
-  bigPublicBrandMax: number;
-  privateFamilyMin: number;
-  sellingToMeMax: number;
-  spamMax: number;
+/**
+ * Open rather than fixed: two presets score for different things and so have
+ * different tier rules. A preset declares its own sliders, the Studio builds
+ * the controls from that declaration, and tier functions fall back to a
+ * default when a preset omits a key.
+ */
+export type Thresholds = Record<string, number>;
+
+export type Slider = {
+  key: string;
+  label: string;
+  /** Shown under the slider so the rule it drives is legible without code. */
+  explains: string;
+  min: number;
+  max: number;
+  step: number;
 };
 
 export type Preset = {
+  id: string;
   name: string;
+  /** One line on what this preset is looking for. */
+  purpose: string;
   /** The ICP block, rendered verbatim on the Methods page. */
   icp: string;
   questions: QuestionSpec[];
   thresholds: Thresholds;
+  sliders: Slider[];
 };
 
 /** One question's answer, stored with its full distribution so thresholds can

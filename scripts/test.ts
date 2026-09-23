@@ -12,7 +12,8 @@ import {
 import { normalizeProfileUrl } from '../lib/parse/urls';
 import { parseConnectedOn, parseSentAt } from '../lib/parse/dates';
 import { validateQuestions, hasBlockingError } from '../lib/spec/validate';
-import { tierFor, countTiers, sizeFit, finalRank, DEFAULT_THRESHOLDS, type TierInput } from '../lib/tiers';
+import { tierFor, countTiers, sizeFit, finalRank, type TierInput } from '../lib/tiers';
+import { GRANT_CLIENTS, INNOVATION_ROLES, PRESETS } from '../lib/presets';
 import type { QuestionSpec } from '../lib/spec/types';
 
 let pass = 0;
@@ -90,49 +91,115 @@ check('No signal is sorted by recency',
   noSignal.every((r, i) =>
     i === 0 || (noSignal[i - 1].sentAt?.getTime() ?? 0) >= (r.sentAt?.getTime() ?? 0)));
 
-console.log('\nTIERS');
-const TARGET = ['executive_director', 'development_or_fundraising', 'founder_or_owner'];
-const PREFERRED = ['nonprofit_or_charity', 'social_enterprise', 'startup_or_sme'];
-const base = { targetRoles: TARGET, preferredIndustries: PREFERRED };
+console.log('\nTIERS — GRANT CLIENTS');
+const TH = GRANT_CLIENTS.thresholds;
+const GC = GRANT_CLIENTS.id;
+const noul = (n: number) => ({ type: 'noul' as const, noul: n });
+const pick = (choice: string, confidence: number) => ({
+  type: 'choice' as const, choice, confidence, probabilities: { [choice]: confidence },
+});
 
-const emptyPositionRow: TierInput = {
-  ...base, positionEmpty: true,
-  answers: { disqualified: { type: 'noul', noul: 0.95 } },
-};
-check('an empty Position resolves to Tier 2, never Rejected',
-  tierFor(emptyPositionRow, DEFAULT_THRESHOLDS) === 'tier2',
-  tierFor(emptyPositionRow, DEFAULT_THRESHOLDS));
-
-const strongRow: TierInput = {
-  ...base, positionEmpty: false,
+// The exact failure from the first live run: United Way scored Tier 1 because a
+// grantmaker looks like a nonprofit on every other signal.
+const funder: TierInput = {
+  positionEmpty: false,
   answers: {
-    role: {
-      type: 'choice', choice: 'executive_director', confidence: 0.92,
-      probabilities: { executive_director: 0.92 },
-    },
-    disqualified: { type: 'noul', noul: 0.02 },
-    is_big_public_brand: { type: 'noul', noul: 0.1 },
-    likely_private_or_family: { type: 'noul', noul: 0.8 },
+    role: pick('funder_or_grantmaker', 0.95),
+    organization_seeks_grants: noul(0.9),
+    has_inhouse_fundraising: noul(0.4),
   },
 };
-check('a confident target role with no disqualifier is Tier 1',
-  tierFor(strongRow, DEFAULT_THRESHOLDS) === 'tier1');
+check('a funder is set aside, not scored as a client',
+  tierFor(GC, funder, TH) === 'funder', tierFor(GC, funder, TH));
 
-const recruiterRow: TierInput = {
-  ...base, positionEmpty: false,
+const smallCharityED: TierInput = {
+  positionEmpty: false,
   answers: {
-    role: { type: 'choice', choice: 'not_executive', confidence: 0.9, probabilities: {} },
-    disqualified: { type: 'noul', noul: 0.88 },
+    role: pick('executive_director', 0.93),
+    organization_seeks_grants: noul(0.92),
+    has_inhouse_fundraising: noul(0.05),
   },
 };
-check('a clear disqualifier is Rejected', tierFor(recruiterRow, DEFAULT_THRESHOLDS) === 'rejected');
+check('an executive director at a grant-seeker with nobody in-house is Tier 1',
+  tierFor(GC, smallCharityED, TH) === 'tier1', tierFor(GC, smallCharityED, TH));
 
-const rows = [emptyPositionRow, strongRow, recruiterRow];
-const before = countTiers(rows, DEFAULT_THRESHOLDS);
-const after = countTiers(rows, { ...DEFAULT_THRESHOLDS, roleConfidenceTier1: 0.95 });
+const sameButStaffed: TierInput = {
+  ...smallCharityED,
+  answers: { ...smallCharityED.answers, has_inhouse_fundraising: noul(0.85) },
+};
+check('the same row drops to Tier 2 once in-house fundraising is evident',
+  tierFor(GC, sameButStaffed, TH) === 'tier2', tierFor(GC, sameButStaffed, TH));
+
+const devDirector: TierInput = {
+  positionEmpty: false,
+  answers: {
+    role: pick('development_or_fundraising', 0.95),
+    organization_seeks_grants: noul(0.9),
+    has_inhouse_fundraising: noul(0.9),
+  },
+};
+check('a development director is Tier 2, not Tier 1',
+  tierFor(GC, devDirector, TH) === 'tier2', tierFor(GC, devDirector, TH));
+
+const recruiter: TierInput = {
+  positionEmpty: false,
+  answers: {
+    role: pick('not_executive', 0.9),
+    organization_seeks_grants: noul(0.05),
+    has_inhouse_fundraising: noul(0.1),
+  },
+};
+check('an organization that does not seek grants is Rejected',
+  tierFor(GC, recruiter, TH) === 'rejected', tierFor(GC, recruiter, TH));
+
+const blankAtMultinational: TierInput = {
+  positionEmpty: true,
+  answers: { organization_seeks_grants: noul(0.02), is_big_public_brand: noul(0.98) },
+};
+check('an empty Position is Tier 2 even when the company would otherwise reject',
+  tierFor(GC, blankAtMultinational, TH) === 'tier2', tierFor(GC, blankAtMultinational, TH));
+
+const rows = [funder, smallCharityED, devDirector, recruiter, blankAtMultinational];
+const before = countTiers(GC, rows, TH);
+const after = countTiers(GC, rows, { ...TH, roleConfidenceTier1: 0.99 });
 check('moving a threshold re-tiers from stored answers with no Jev call',
-  before.tier1 === 1 && after.tier1 === 0,
-  `tier1 ${before.tier1} -> ${after.tier1}`);
+  before.tier1 === 1 && after.tier1 === 0, `tier1 ${before.tier1} -> ${after.tier1}`);
+check('counts cover every tier including funder',
+  Object.keys(before).length === 5 && before.funder === 1);
+
+console.log('\nTIERS — INNOVATION ROLES (the mirror image)');
+const IR = INNOVATION_ROLES.id;
+const ITH = INNOVATION_ROLES.thresholds;
+const innovationDirector: TierInput = {
+  positionEmpty: false,
+  answers: {
+    role: pick('innovation_leader', 0.95),
+    could_hire_or_refer: noul(0.85),
+    organization_runs_innovation_programs: noul(0.9),
+  },
+};
+check('an innovation director is Tier 1 in the job-search preset',
+  tierFor(IR, innovationDirector, ITH) === 'tier1', tierFor(IR, innovationDirector, ITH));
+check('the same person is NOT Tier 1 in the client preset',
+  tierFor(GC, innovationDirector, TH) !== 'tier1', tierFor(GC, innovationDirector, TH));
+
+const recruiterForJobs: TierInput = {
+  positionEmpty: false,
+  answers: {
+    role: pick('talent_or_recruiter', 0.92),
+    could_hire_or_refer: noul(0.8),
+    organization_runs_innovation_programs: noul(0.3),
+  },
+};
+check('a recruiter is a target in the job search but rejected as a client',
+  tierFor(IR, recruiterForJobs, ITH) === 'tier2' && tierFor(GC, recruiter, TH) === 'rejected');
+
+console.log('\nPRESETS');
+check('both presets ship', PRESETS.length === 2);
+check('every preset passes its own validator',
+  PRESETS.every((p) => !hasBlockingError(validateQuestions(p.questions))));
+check('every preset declares a slider for each threshold it uses',
+  PRESETS.every((p) => p.sliders.every((sl) => sl.key in p.thresholds)));
 
 console.log('\nSIZE IS A BAND, NOT A CEILING');
 check('a mid-sized organization fits best', sizeFit(2) === 1);
