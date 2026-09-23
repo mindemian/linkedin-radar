@@ -10,6 +10,7 @@
 
 import { TypeSafeClient } from '@typesafe-ai/sdk';
 import { compile, normalizeAnswer, stateFor } from './spec/compile';
+import { hashAll } from './spec/hash';
 import type { Answer, QuestionSpec } from './spec/types';
 
 if (typeof window !== 'undefined') {
@@ -58,6 +59,7 @@ function jevClient(): TypeSafeClient {
 export type ScoredRow = {
   rowId: string;
   answers: Record<string, Answer>;
+  questionHashes: Record<string, string>;
   latencyMs: number;
   inputTokens: number;
   model: string;
@@ -87,6 +89,7 @@ export async function scoreRow(
     return {
       rowId,
       answers,
+      questionHashes: hashAll(enabled),
       latencyMs: Date.now() - started,
       inputTokens: result.usage.input_tokens,
       model: result.model,
@@ -96,6 +99,7 @@ export async function scoreRow(
     return {
       rowId,
       answers: {},
+      questionHashes: {},
       latencyMs: Date.now() - started,
       inputTokens: 0,
       model: '',

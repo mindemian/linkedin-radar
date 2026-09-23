@@ -76,6 +76,11 @@ export type Answer =
 export type RowResult = {
   rowId: string;
   answers: Record<string, Answer>;
+  /**
+   * The question hashes in force when this row was scored. Lets the app tell
+   * that a stored answer no longer answers the question being asked.
+   */
+  questionHashes?: Record<string, string>;
   latencyMs: number;
   inputTokens: number;
   model: string;

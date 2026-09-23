@@ -14,6 +14,8 @@ import { parseConnectedOn, parseSentAt } from '../lib/parse/dates';
 import { validateQuestions, hasBlockingError } from '../lib/spec/validate';
 import { tierFor, countTiers, sizeFit, finalRank, type TierInput } from '../lib/tiers';
 import { GRANT_CLIENTS, INNOVATION_ROLES, PRESETS } from '../lib/presets';
+import { questionHash, hashAll, staleness, describeStaleness } from '../lib/spec/hash';
+import { fork, forkName, isBuiltIn, importJson, exportJson } from '../lib/presets/fork';
 import type { QuestionSpec } from '../lib/spec/types';
 
 let pass = 0;
@@ -218,6 +220,90 @@ const midsizeCharity = {
 check('a multinational does not outrank a mid-sized charity',
   finalRank(midsizeCharity) > finalRank(multinational),
   `charity ${finalRank(midsizeCharity).toFixed(2)} vs multinational ${finalRank(multinational).toFixed(2)}`);
+
+console.log('\nQUESTION VERSIONING');
+const baseQ = GRANT_CLIENTS.questions.find((q) => q.id === 'organization_seeks_grants')!;
+const h0 = questionHash(baseQ);
+
+check('the same question hashes the same twice', questionHash({ ...baseQ }) === h0);
+check('rewording the instructions changes the hash',
+  questionHash({ ...baseQ, instructions: baseQ.instructions + ' Also consider X.' }) !== h0);
+check('changing the fields changes the hash',
+  questionHash({ ...baseQ, fields: ['company'] }) !== h0);
+check('disabling a question does NOT change its hash',
+  questionHash({ ...baseQ, enabled: false }) === h0,
+  'a spurious stale warning teaches people to ignore the warning');
+check('reordering the field list does NOT change the hash',
+  questionHash({ ...baseQ, fields: [...baseQ.fields].reverse() }) === h0);
+
+const choiceQ = GRANT_CLIENTS.questions.find((q) => q.id === 'role')!;
+if (choiceQ.type === 'choice') {
+  const edited = {
+    ...choiceQ,
+    options: choiceQ.options.map((o, i) => (i === 0 ? { ...o, criterion: o.criterion + ' Plus.' } : o)),
+  };
+  check('editing one option criterion changes the hash', questionHash(edited) !== questionHash(choiceQ));
+}
+
+const liveQs = GRANT_CLIENTS.questions.filter((q) => q.tab === 'connections');
+const currentHashes = hashAll(liveQs);
+const scoredRows: Record<string, { questionHashes?: Record<string, string> }> = {};
+for (let i = 0; i < 400; i++) scoredRows[`c${i}`] = { questionHashes: { ...currentHashes } };
+
+const fresh = staleness(scoredRows, liveQs);
+check('nothing is stale when nothing changed', fresh.staleRows === 0 && describeStaleness(fresh) === null);
+
+// Reword one question, as the Studio would.
+const rewordedQs = liveQs.map((q) =>
+  q.id === 'organization_seeks_grants' ? { ...q, instructions: q.instructions + ' Extra.' } : q);
+const stale = staleness(scoredRows, rewordedQs);
+check('every row scored under the old wording is counted stale',
+  stale.byQuestion.organization_seeks_grants === 400 && stale.staleRows === 400,
+  `${stale.byQuestion.organization_seeks_grants} counted`);
+check('only the edited question is stale', Object.keys(stale.byQuestion).length === 1);
+const msg = describeStaleness(stale) ?? '';
+check('the warning names the question and the count in plain English',
+  msg.includes('400 of 400') && msg.includes('organization seeks grants') && msg.includes('Re-run'),
+  msg.slice(0, 80));
+
+// A row that never answered the question is unscored, not stale.
+const partial = { c0: { questionHashes: {} } };
+check('a row that never answered a question is not counted stale',
+  staleness(partial, rewordedQs).staleRows === 0);
+
+console.log('\nPRESET FORKING AND IMPORT');
+const forked = fork(GRANT_CLIENTS, [...PRESETS]);
+check('a fork gets a new id and name', forked.id !== GRANT_CLIENTS.id && forked.name.includes('edited'));
+if (forked.questions[0].type === 'choice' && GRANT_CLIENTS.questions[0].type === 'choice') {
+  forked.questions[0].options[0].criterion = 'MUTATED';
+  check('editing a fork does not touch the shipped preset',
+    GRANT_CLIENTS.questions[0].options[0].criterion !== 'MUTATED');
+}
+forked.thresholds.seeksGrantsMin = 0.99;
+check('fork thresholds are independent', GRANT_CLIENTS.thresholds.seeksGrantsMin !== 0.99);
+check('two forks of the same preset do not collide',
+  forkName(GRANT_CLIENTS, [...PRESETS, forked]).id !== forked.id);
+check('shipped presets are recognised as built-in',
+  isBuiltIn(GRANT_CLIENTS.id) && !isBuiltIn(forked.id));
+
+const roundTrip = importJson(exportJson(INNOVATION_ROLES), [...PRESETS]);
+check('a preset survives export and re-import', roundTrip.ok);
+check('re-importing a shipped preset forks it rather than replacing it',
+  roundTrip.ok && roundTrip.preset.id !== INNOVATION_ROLES.id);
+
+check('invalid JSON is refused', !importJson('{not json', []).ok);
+check('a file with no questions is refused', !importJson('{"name":"x"}', []).ok);
+
+const badPreset = JSON.stringify({
+  id: 'evil', name: 'Evil', questions: [{
+    id: 'sneaky', tab: 'connections', type: 'noul', enabled: true,
+    fields: ['country'], instructions: 'Where do they live?',
+  }],
+});
+const rejected = importJson(badPreset, []);
+check('an imported preset naming an out-of-contract field is refused',
+  !rejected.ok && (rejected as any).errors?.length > 0,
+  rejected.ok ? 'accepted!' : (rejected as any).errors?.[0]?.message?.slice(0, 60));
 
 console.log('\nSPEC VALIDATION');
 const good: QuestionSpec = {
