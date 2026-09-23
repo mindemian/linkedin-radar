@@ -14,7 +14,7 @@ import {
 } from '@/lib/parse/invitations';
 import { PRESETS, DEFAULT_PRESET_ID } from '@/lib/presets';
 import { startRun, costOf, type RunHandle, type RunProgress } from '@/lib/run';
-import { fileKey, loadResults, setFlags, allFlags } from '@/lib/store';
+import { fileKey, loadResults, setFlags, allFlags, setActiveFileKey } from '@/lib/store';
 import { connectionState, fullName, initialsOf, tierOfConnection } from '@/lib/rows';
 import { downloadCsv } from '@/lib/csv';
 import { TIER_LABELS, type ConnectionTier } from '@/lib/tiers';
@@ -89,6 +89,7 @@ export default function Page() {
       setConnFile(f); setConn(parsed);
       const k = await fileKey(f.text);
       setKey(k);
+      await setActiveFileKey(k);
       setResults(await loadResults(k));
     } else {
       const parsed = parseInvitations(f.text);
@@ -247,6 +248,7 @@ export default function Page() {
           >
             {PRESETS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
+          <Link href="/studio" className="text-xs underline">Studio</Link>
           <Link href="/methods" className="text-xs underline">Methods</Link>
         </div>
       </header>

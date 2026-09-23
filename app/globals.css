@@ -70,3 +70,41 @@ body {
 .t3 { background: var(--rule); color: var(--muted); }
 .trej { background: transparent; color: var(--muted); opacity: 0.35; border: 1px dashed var(--rule); }
 .tpending { background: transparent; color: var(--muted); border: 1px solid var(--rule); }
+
+/* The design is black, white and one accent. A default browser-blue slider
+   breaks that on the one page devoted to making the rules legible. */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 2px;
+  background: var(--rule);
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+}
+input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+
+input[type="checkbox"] { accent-color: var(--accent); }
+
+/* Question text is the thing being edited, so it must never be clipped at an
+   arbitrary height. Grow to fit, with a floor so short fields stay tidy. */
+textarea {
+  field-sizing: content;
+  min-height: 4.5rem;
+  max-height: 32rem;
+  resize: vertical;
+}
+textarea[rows="1"], textarea[rows="2"] { min-height: 2.75rem; }

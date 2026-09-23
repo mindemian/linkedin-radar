@@ -85,7 +85,7 @@ export default function VerifyingPanel({
               <div key={id}>
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="label">{id.replace(/_/g, ' ')}</span>
-                  <Link href="/methods" className="text-[10px] underline" style={{ color: 'var(--muted)' }}>
+                  <Link href={`/studio#${id}`} className="text-[10px] underline" style={{ color: 'var(--muted)' }}>
                     Edit this question
                   </Link>
                 </div>

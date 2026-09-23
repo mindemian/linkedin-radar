@@ -88,6 +88,19 @@ export async function getActivePreset(): Promise<string | undefined> {
   return (await db()).get('meta', 'activePreset');
 }
 
+/**
+ * Which upload the last run scored. The Studio needs it to show real tier
+ * counts and real staleness; without it the Studio silently shows zeroes and
+ * looks broken.
+ */
+export async function setActiveFileKey(key: string): Promise<void> {
+  (await db()).put('meta', key, 'activeFileKey');
+}
+
+export async function getActiveFileKey(): Promise<string | undefined> {
+  return (await db()).get('meta', 'activeFileKey');
+}
+
 export async function setFlags(rowId: string, flags: Flags): Promise<void> {
   const d = await db();
   const existing = ((await d.get('flags', rowId)) ?? {}) as Flags;

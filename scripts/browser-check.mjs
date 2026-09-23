@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 import { resolve } from 'node:path';
 
-const URL = 'http://localhost:3102';
+const URL = 'http://localhost:3105';
 const FIX = resolve(process.cwd(), 'fixtures');
 let pass = 0, fail = 0;
 const check = (n, ok, d='') => { ok ? (pass++, console.log(`  PASS  ${n}`)) : (fail++, console.log(`  FAIL  ${n}${d?` — ${d}`:''}`)); };
@@ -100,6 +100,63 @@ check('the methods page renders both presets', /Grant clients/.test(methods) && 
 check('it shows the field contract', /connected_for/.test(methods));
 check('it states that no Apify actor is selected', /No Apify actor is selected/.test(methods));
 check('it quotes question criteria verbatim', /funder_or_grantmaker/.test(methods));
+
+console.log('\nSTUDIO');
+await page.goto(`${URL}/studio`, { waitUntil: 'networkidle' });
+const studio = await page.locator('body').innerText();
+const cardCount = await page.locator('article').count();
+const ids = await page.locator('article input[type="text"], article input:not([type])').evaluateAll(
+  (els) => els.map((e) => e.value),
+);
+check('the studio renders every question of the active preset',
+  cardCount === 11 && ids.includes('organization_seeks_grants'),
+  `${cardCount} cards, ids: ${ids.slice(0, 3).join(', ')}`);
+check('it says plainly that thresholds are free', /Free\./i.test(studio));
+check('it says plainly that editing a question is not',
+  /Not free|no longer match/i.test(studio));
+
+// The central claim about sliders: moving one costs nothing. Assert on the
+// absence of a network call, not on the words.
+let scoreCalls = 0;
+const countScore = (r) => { if (r.url().includes('/api/score')) scoreCalls += 1; };
+page.on('request', countScore);
+const beforeCounts = await page.getByTestId('tier-counts').innerText();
+const slider = page.locator('input[type=range]').first();
+// fill() drives the native value setter, which is what React's change
+// tracking listens to. Assigning el.value directly is silently ignored.
+await slider.fill('1');
+await page.waitForTimeout(900);
+const afterCounts = await page.getByTestId('tier-counts').innerText();
+page.off('request', countScore);
+check('moving a slider makes no scoring request at all', scoreCalls === 0, `${scoreCalls} calls`);
+check('moving a slider changes the tier counts', beforeCounts !== afterCounts,
+  `${beforeCounts.replace(/\n/g, ' ')} -> ${afterCounts.replace(/\n/g, ' ')}`);
+
+// Editing a question must raise the stale warning, since answers were stored
+// under the old wording.
+const firstInstructions = page.locator('textarea').first();
+await firstInstructions.fill('Completely different question now.');
+await page.waitForTimeout(800);
+const warned = await page.getByTestId('stale-warning').isVisible().catch(() => false);
+check('editing a question warns that stored answers no longer match', warned);
+if (warned) {
+  const w = await page.getByTestId('stale-warning').innerText();
+  check('the stale warning names a count and tells you to re-run',
+    /\d+ of \d+ rows/.test(w) && /Re-run/i.test(w), w.slice(0, 70));
+}
+
+// Editing a shipped preset must fork rather than mutate it.
+await page.goto(`${URL}/studio`, { waitUntil: 'networkidle' });
+const options = await page.locator('select').first().locator('option').allInnerTexts();
+check('shipped presets are still intact after an edit',
+  options.some((o) => o.trim() === 'Grant clients'), options.join(' | '));
+
+// A bad edit must block saving, with the same validator the route uses.
+const idField = page.locator('article input[type="text"], article input:not([type])').first();
+await idField.fill('');
+await page.waitForTimeout(600);
+const saveDisabled = await page.getByRole('button', { name: 'Save' }).isDisabled();
+check('an invalid question blocks saving', saveDisabled);
 
 console.log('\nCONSOLE');
 check('no page errors during the whole run', errors.length === 0, errors.slice(0, 2).join(' | '));

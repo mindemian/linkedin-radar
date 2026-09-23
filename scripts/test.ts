@@ -16,6 +16,7 @@ import { tierFor, countTiers, sizeFit, finalRank, type TierInput } from '../lib/
 import { GRANT_CLIENTS, INNOVATION_ROLES, PRESETS } from '../lib/presets';
 import { questionHash, hashAll, staleness, describeStaleness } from '../lib/spec/hash';
 import { fork, forkName, isBuiltIn, importJson, exportJson } from '../lib/presets/fork';
+import { convert, describeLoss, type WithPrevious } from '../lib/spec/convert';
 import type { QuestionSpec } from '../lib/spec/types';
 
 let pass = 0;
@@ -304,6 +305,33 @@ const rejected = importJson(badPreset, []);
 check('an imported preset naming an out-of-contract field is refused',
   !rejected.ok && (rejected as any).errors?.length > 0,
   rejected.ok ? 'accepted!' : (rejected as any).errors?.[0]?.message?.slice(0, 60));
+
+console.log('\nTYPE CONVERSION — the data-loss point');
+const roleQ = GRANT_CLIENTS.questions.find((q) => q.id === 'role')! as WithPrevious;
+const optionCount = roleQ.type === 'choice' ? roleQ.options.length : 0;
+check('converting away from a rich choice warns about what is lost',
+  (describeLoss(roleQ, 'noul') ?? '').includes(String(optionCount)),
+  describeLoss(roleQ, 'noul') ?? 'no warning');
+
+const asNoul = convert(roleQ, 'noul');
+check('the conversion happens', asNoul.type === 'noul');
+const backToChoice = convert(asNoul, 'choice');
+check('converting back restores every original option',
+  backToChoice.type === 'choice' && backToChoice.options.length === optionCount,
+  backToChoice.type === 'choice' ? `${backToChoice.options.length} of ${optionCount}` : 'wrong type');
+check('the restored criteria are the originals, not regenerated',
+  backToChoice.type === 'choice' && roleQ.type === 'choice' &&
+  backToChoice.options[0].criterion === roleQ.options[0].criterion);
+
+const scored = convert(roleQ, 'score');
+check('a choice converted to a score keeps its criteria as levels',
+  scored.type === 'score' && scored.levels.length > 0 && scored.levels.length <= 10);
+check('a score never exceeds the ten-level limit the validator enforces',
+  scored.type !== 'score' || !hasBlockingError(validateQuestions([scored])));
+
+check('converting to the same type is a no-op', convert(roleQ, 'choice') === roleQ);
+check('no warning when nothing would be lost',
+  describeLoss({ ...roleQ, type: 'noul', whenTrue: undefined, whenFalse: undefined } as any, 'choice') === null);
 
 console.log('\nSPEC VALIDATION');
 const good: QuestionSpec = {

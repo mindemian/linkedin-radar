@@ -91,10 +91,25 @@ question carries its own instructions and a criterion for every possible answer.
 The **Methods** page in the app renders all of it verbatim, which is the honest
 answer to "why did it say that".
 
-### Sharing a preset
+### The Classifier Studio
 
-The Methods page shows the active preset in full. Copy the preset file to share
-it, or export it as JSON from the Classifier Studio once that ships.
+Everything above is also editable inside the app, at **/studio**. Rewrite any
+question, add or remove answer options, change a question's type, pick which
+fields it reads, and drag the thresholds.
+
+Two things there are worth understanding, because they behave differently:
+
+- **Moving a threshold is free.** It re-sorts everyone from answers already
+  stored and makes no new request. The tier counts update as you drag.
+- **Editing a question is not.** The answers on file were given to the old
+  wording, so the app tells you how many rows are now out of date and asks you
+  to re-run. It will not quietly show you counts derived from a question you
+  have since changed.
+
+Shipped presets are read-only. Your first edit forks them, so **Reset to
+defaults** always has something to go back to. **Download JSON** and **Upload
+JSON** move a preset between machines; an uploaded preset goes through the same
+validation as everything else, so it cannot smuggle in a forbidden field.
 
 ---
 
