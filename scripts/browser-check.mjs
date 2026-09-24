@@ -93,6 +93,50 @@ await page.waitForTimeout(2500);
 const after = await page.locator('body').innerText();
 check('a reload resumes from storage rather than rescoring', /400 already scored/i.test(after), after.match(/[\d,]+ already scored/)?.[0]);
 
+console.log('\nDISTRIBUTIONS');
+const charts = page.getByTestId('distributions');
+check('the distributions render once rows are scored', await charts.isVisible());
+const chartText = await charts.innerText();
+check('the connected-for histogram keeps its buckets in time order',
+  /under 1 year[\s\S]*1–3 years[\s\S]*3\+ years/.test(chartText));
+check('every chart says how many rows it counted', /answered/i.test(chartText));
+
+const figures = await charts.locator('figure').count();
+check('there is a chart per choice question plus the histogram', figures >= 3, `${figures} figures`);
+
+// One series, one fill: no chart may colour its bars by size.
+const fills = await charts.locator('figure li span[style*="background"]').evaluateAll(
+  (els) => [...new Set(els.map((e) => getComputedStyle(e).backgroundColor))],
+);
+check('every bar uses the same single fill', fills.length === 1, fills.join(' | '));
+
+const widths = await charts.locator('figure').first().locator('li span[style*="width"]').evaluateAll(
+  (els) => els.map((e) => parseFloat(e.style.width)),
+);
+check('bar length encodes the count', widths.length > 1 && Math.max(...widths) === 100,
+  widths.join(','));
+
+// Every value must also be readable without a chart.
+await page.getByRole('button', { name: 'Show as tables' }).click();
+await page.waitForTimeout(300);
+const tableText = await charts.innerText();
+check('a table view gives the same numbers without colour',
+  /SHARE/i.test(tableText) && /%/.test(tableText));
+await page.getByRole('button', { name: 'Show as charts' }).click();
+await page.waitForTimeout(300);
+
+// Dark mode is its own set of steps, not an automatic flip.
+await page.emulateMedia({ colorScheme: 'dark' });
+await page.waitForTimeout(400);
+const darkFill = await charts.locator('figure li span[style*="background"]').first()
+  .evaluate((e) => getComputedStyle(e).backgroundColor);
+check('dark mode uses a different, chosen bar colour', darkFill !== fills[0], `${fills[0]} -> ${darkFill}`);
+check('the charts still render in dark mode', await charts.isVisible());
+await charts.screenshot({ path: 'charts-dark.png' });
+await page.emulateMedia({ colorScheme: 'light' });
+await page.waitForTimeout(300);
+await charts.screenshot({ path: 'charts-light.png' });
+
 console.log('\nINVITATIONS');
 await page.locator('input[aria-label="invitations file"]').setInputFiles(resolve(FIX, 'Invitations.csv'));
 await page.waitForTimeout(900);

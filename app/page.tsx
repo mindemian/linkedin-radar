@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Upload, { type LoadedFile } from '@/components/Upload';
 import UploadBar from '@/components/UploadBar';
 import Tiles from '@/components/Tiles';
+import Distributions from '@/components/Distributions';
 import AvatarGrid, { type GridItem } from '@/components/AvatarGrid';
 import VerifyingPanel, { type PanelRow } from '@/components/VerifyingPanel';
 import { parseConnections, type ConnectionsParse } from '@/lib/parse/connections';
@@ -444,6 +445,11 @@ export default function Page() {
         )}
       </div>
 
+      <Distributions
+        preset={preset}
+        results={results}
+        connectedFor={conn.rows.map((c) => c.connected_for)}
+      />
       </>
       )}
 

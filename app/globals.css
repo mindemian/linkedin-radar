@@ -9,6 +9,10 @@
   --muted: #6b6b6b;
   --rule: #e2e2dd;
   --accent: #c8452b;
+  /* The bar fill. Split from --accent because the interface accent sits just
+     outside the validated lightness band on the dark surface; this is the
+     nearest step of the same rust that passes on both. */
+  --mark: #c8452b;
   --panel: #ffffff;
   color-scheme: light;
 }
@@ -19,6 +23,7 @@
   --muted: #9a9a95;
   --rule: #272725;
   --accent: #ff6a4d;
+  --mark: #f4573a;
   --panel: #161615;
   color-scheme: dark;
 }
@@ -30,6 +35,7 @@
     --muted: #9a9a95;
     --rule: #272725;
     --accent: #ff6a4d;
+    --mark: #f4573a;
     --panel: #161615;
     color-scheme: dark;
   }

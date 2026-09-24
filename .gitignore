@@ -6,3 +6,5 @@ node_modules
 next-env.d.ts
 # Fixtures are generated, never committed. No personal data in git.
 /fixtures/
+# Screenshots the browser check writes so a human can eyeball the charts.
+/charts-*.png
