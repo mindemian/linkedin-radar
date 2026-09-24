@@ -50,7 +50,23 @@ Press **Run**. The grid fills in as it goes, coloured by tier:
 Click anyone to see every question, the answer, and how sure the model was.
 Tick **DM** and **Acc** as you work through them; those save in your browser.
 
+Under the charts at the bottom of that tab you can see where everyone landed:
+how long you have been connected, and what the model picked for each question.
+**Show as tables** gives you the same numbers as figures.
+
 Roughly **four cents per thousand people**, and about a minute.
+
+### The INVITATIONS tab
+
+Three lists, and only one of them is ever sent for scoring.
+
+| | |
+|---|---|
+| **Incoming, with a note** | Scored, then sorted into **Accept**, **Review** and **Ignore**. Each row shows the note, because the note is the evidence. |
+| **No signal** | Incoming invitations that arrived with no note, newest first. Never sent for scoring: an empty note gives nothing to judge. Tick the ones worth looking up later. |
+| **Outgoing** | Who accepted and who has not replied. Worked out in code by matching profile URLs against your Connections file. No scoring at all. |
+
+The accepted and pending counts need both files loaded.
 
 ## 3. Run your own copy
 
@@ -106,6 +122,16 @@ Two things there are worth understanding, because they behave differently:
   to re-run. It will not quietly show you counts derived from a question you
   have since changed.
 
+Two buttons make that loop usable:
+
+- **Test on 25 rows** scores a sample with your edited questions and shows the
+  old answer beside the new one, marking every row that answered differently.
+  It saves nothing, so a trial never touches what the main screen is showing.
+  About a tenth of a cent, stated before it runs.
+- **Re-run all** rescores the whole file. It tells you the cost first, from the
+  average of what your last run actually used, and neither button will fire
+  while a question fails validation.
+
 Shipped presets are read-only. Your first edit forks them, so **Reset to
 defaults** always has something to go back to. **Download JSON** and **Upload
 JSON** move a preset between machines; an uploaded preset goes through the same
@@ -157,10 +183,11 @@ npm install
 cp .env.example .env.local   # paste your key
 npm run dev
 
-npm test                     # 47 checks, no network
+npm test                     # 86 checks, no network
+npm run typecheck            # also fails on an unused local
 npm run fixtures             # synthetic test files, gitignored
 npx tsx scripts/live-check.ts  # both presets against the live model
-node scripts/browser-check.mjs # 21 checks driving a real browser
+node scripts/browser-check.mjs # 60 checks driving a real browser
 ```
 
 Fixtures are generated and never committed. No personal data is in this
