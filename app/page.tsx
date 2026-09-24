@@ -12,8 +12,8 @@ import InvitationsTab from '@/components/InvitationsTab';
 import { joinWithConnections, parseInvitations, type InvitationsParse } from '@/lib/parse/invitations';
 import { PRESETS, DEFAULT_PRESET_ID } from '@/lib/presets';
 import { startRun, type RunHandle, type RunProgress } from '@/lib/run';
-import { fileKey, loadResults, setFlags, allFlags, setActiveFileKey } from '@/lib/store';
-import { connectionState, fullName, initialsOf, tierOfConnection } from '@/lib/rows';
+import { fileKey, loadResults, setFlags, allFlags, setActiveFileKey, saveRows } from '@/lib/store';
+import { connectionFields, connectionState, fullName, initialsOf, invitationFields, tierOfConnection } from '@/lib/rows';
 import { downloadCsv } from '@/lib/csv';
 import { TIER_LABELS, type ConnectionTier } from '@/lib/tiers';
 import type { RowResult } from '@/lib/spec/types';
@@ -90,12 +90,21 @@ export default function Page() {
       const k = await fileKey(f.text);
       setKey(k);
       await setActiveFileKey(k);
+      // Kept so the Studio can re-run and test-run without asking for the file
+      // again. Contract fields only: exactly what /api/score would receive.
+      await saveRows(k, parsed.rows.map((c) => ({
+        rowId: c.rowId, tab: 'connections' as const, fields: connectionFields(c),
+      })));
       setResults(await loadResults(k));
     } else {
       const parsed = parseInvitations(f.text);
       if (!parsed) { setError('That file could not be read.'); return; }
       setInvFile(f); setInv(parsed);
-      setInvKey(await fileKey(f.text));
+      const ik = await fileKey(f.text);
+      setInvKey(ik);
+      await saveRows(ik, parsed.rows.map((i) => ({
+        rowId: i.rowId, tab: 'invitations' as const, fields: invitationFields(i),
+      })));
     }
   }, []);
 

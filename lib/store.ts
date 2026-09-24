@@ -10,10 +10,11 @@
  */
 
 import { openDB, type IDBPDatabase } from 'idb';
+import type { Tab } from './contract';
 import type { Preset, RowResult } from './spec/types';
 
 const DB_NAME = 'linkedin-radar';
-const VERSION = 1;
+const VERSION = 2;
 
 type Flags = { dmSent?: boolean; accepted?: boolean };
 
@@ -21,11 +22,17 @@ let dbp: Promise<IDBPDatabase> | undefined;
 
 function db() {
   dbp ??= openDB(DB_NAME, VERSION, {
-    upgrade(d) {
+    upgrade(d, from) {
+      // A browser that already holds a v1 database only needs the new store.
+      if (from >= 1) {
+        if (!d.objectStoreNames.contains('rows')) d.createObjectStore('rows');
+        return;
+      }
       d.createObjectStore('results');   // `${fileKey}:${rowId}` -> RowResult
       d.createObjectStore('presets');   // name -> Preset
       d.createObjectStore('flags');     // rowId -> Flags
       d.createObjectStore('meta');      // misc: active preset name, file keys
+      d.createObjectStore('rows');      // `${fileKey}:${rowId}` -> StoredRow
     },
   });
   return dbp;
@@ -66,6 +73,31 @@ export async function clearResults(key: string): Promise<void> {
     cursor = await cursor.continue();
   }
   await tx.done;
+}
+
+/**
+ * The contract fields of every parsed row, so the Studio can re-run and
+ * test-run without the user re-picking the file. Nothing else from the upload
+ * is kept: these are exactly the fields that would go to /api/score anyway.
+ */
+export type StoredRow = { rowId: string; tab: Tab; fields: Record<string, string> };
+
+export async function saveRows(key: string, rows: StoredRow[]): Promise<void> {
+  const d = await db();
+  const tx = d.transaction('rows', 'readwrite');
+  await Promise.all(rows.map((r) => tx.store.put(r, `${key}:${r.rowId}`)));
+  await tx.done;
+}
+
+export async function loadRows(key: string): Promise<StoredRow[]> {
+  const d = await db();
+  const out: StoredRow[] = [];
+  let cursor = await d.transaction('rows').store.openCursor();
+  while (cursor) {
+    if (String(cursor.key).startsWith(`${key}:`)) out.push(cursor.value as StoredRow);
+    cursor = await cursor.continue();
+  }
+  return out;
 }
 
 export async function savePreset(p: Preset): Promise<void> {

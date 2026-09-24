@@ -219,6 +219,55 @@ await page.waitForTimeout(600);
 const saveDisabled = await page.getByRole('button', { name: 'Save' }).isDisabled();
 check('an invalid question blocks saving', saveDisabled);
 
+// The feedback loop: the stale warning has to be actionable, and a trial must
+// not touch what the main screen is showing.
+console.log('\nTEST RUN AND RE-RUN');
+await page.goto(`${URL}/studio`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(800);
+const studioBody = await page.locator('body').innerText();
+check('the studio offers a test run and a full re-run',
+  /Test on 25 rows/i.test(studioBody) && /Re-run all/i.test(studioBody));
+check('both buttons state their cost before firing',
+  /Test costs about \$\d+\.\d{4}/i.test(studioBody), studioBody.match(/Test costs[^.]*\./)?.[0]);
+
+// Invalid spec must disable both, with the same validator the route uses.
+const idInput = page.locator('article input[type="text"], article input:not([type])').first();
+await idInput.fill('');
+await page.waitForTimeout(500);
+check('an invalid spec disables the re-run',
+  await page.getByTestId('rerun-all').isDisabled());
+await idInput.fill('role');
+await page.waitForTimeout(500);
+check('fixing the spec enables the re-run again',
+  !(await page.getByTestId('rerun-all').isDisabled()));
+
+// Edit a question so the answers genuinely should move, then test on 25.
+const firstText = page.locator('textarea').first();
+await firstText.fill('Is this person a chief executive? Answer only from the Position field.');
+await page.waitForTimeout(600);
+await page.getByRole('button', { name: /Test on \d+ rows/i }).click();
+await page.waitForSelector('[data-testid="trial-table"] tbody tr', { timeout: 180000 }).catch(() => {});
+await page.waitForFunction(
+  () => !/Testing…/.test(document.body.innerText), null, { timeout: 180000 },
+).catch(() => {});
+await page.waitForTimeout(800);
+const trial = await page.getByTestId('trial-table').innerText();
+check('the trial shows a before and an after column', /WAS/.test(trial) && /NOW/.test(trial));
+check('the trial reports how many rows answered differently',
+  /\d+ of \d+ rows answered differently/i.test(trial),
+  trial.match(/\d+ of \d+ rows answered differently/i)?.[0]);
+check('the trial says plainly that nothing was saved', /Nothing here was saved/i.test(trial));
+const trialRows = await page.locator('[data-testid="trial-table"] tbody tr').count();
+check('the trial scored the sample, not the whole file', trialRows > 0 && trialRows <= 25 * 12,
+  `${trialRows} answer rows`);
+
+// A trial must leave the real answers alone.
+await page.goto(URL, { waitUntil: 'networkidle' });
+await page.locator('input[type=file]').first().setInputFiles(resolve(FIX, 'Connections.csv'));
+await page.waitForTimeout(2500);
+check('a test run did not overwrite the stored answers',
+  /400 already scored/i.test(await page.locator('body').innerText()));
+
 console.log('\nCONSOLE');
 check('no page errors during the whole run', errors.length === 0, errors.slice(0, 2).join(' | '));
 

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import QuestionCard from '@/components/studio/QuestionCard';
+import TestRun from '@/components/studio/TestRun';
 import { PRESETS, DEFAULT_PRESET_ID } from '@/lib/presets';
 import { fork, exportJson, importJson } from '@/lib/presets/fork';
 import { allPresets, persist, remove } from '@/lib/presets/custom';
@@ -10,8 +11,7 @@ import { isBuiltIn } from '@/lib/presets/fork';
 import { validateQuestions, hasBlockingError } from '@/lib/spec/validate';
 import { describeStaleness, staleness } from '@/lib/spec/hash';
 import { countTiers, TIER_LABELS, type TierInput } from '@/lib/tiers';
-import { loadResults, getActivePreset, setActivePreset, getActiveFileKey } from '@/lib/store';
-import { costOf } from '@/lib/run';
+import { loadResults, loadRows, getActivePreset, setActivePreset, getActiveFileKey, type StoredRow } from '@/lib/store';
 import type { Preset, RowResult } from '@/lib/spec/types';
 import type { WithPrevious } from '@/lib/spec/convert';
 
@@ -22,6 +22,8 @@ export default function Studio() {
   const [results, setResults] = useState<Record<string, RowResult>>({});
   const [saved, setSaved] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [rows, setRows] = useState<StoredRow[]>([]);
+  const [fileKey, setFileKey] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -35,7 +37,11 @@ export default function Studio() {
       // upload was scored. Passing an empty key here returns nothing and makes
       // the whole page look broken while reporting no error at all.
       const key = await getActiveFileKey();
-      if (key) setResults(await loadResults(key));
+      if (key) {
+        setFileKey(key);
+        setResults(await loadResults(key));
+        setRows(await loadRows(key));
+      }
     })();
   }, []);
 
@@ -58,12 +64,6 @@ export default function Studio() {
     () => countTiers(draft.id.startsWith('innovation') ? 'innovation-roles' : 'grant-clients', tierInputs, draft.thresholds),
     [tierInputs, draft.thresholds, draft.id],
   );
-
-  const avgTokens = useMemo(() => {
-    const scored = Object.values(results).filter((r) => r.inputTokens > 0);
-    if (scored.length === 0) return 0;
-    return scored.reduce((n, r) => n + r.inputTokens, 0) / scored.length;
-  }, [results]);
 
   /** The first edit to a shipped preset forks it rather than mutating it. */
   const edit = useCallback((next: Preset) => {
@@ -214,12 +214,15 @@ export default function Studio() {
           </span>
         </div>
 
-        {avgTokens > 0 && (
-          <p className="mt-2 text-xs" style={{ color: 'var(--muted)' }}>
-            A full re-run of {Object.keys(results).length.toLocaleString()} rows would cost about{' '}
-            ${costOf(avgTokens * Object.keys(results).length).toFixed(4)}.
-          </p>
-        )}
+        <TestRun
+          draft={draft}
+          rows={rows}
+          results={results}
+          fileKey={fileKey}
+          blocked={blocked}
+          staleCount={stale.staleRows}
+          onReplaceResults={setResults}
+        />
 
         <div className="mt-4 space-y-5">
           {draft.questions.map((q, i) => (

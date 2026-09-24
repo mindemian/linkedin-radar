@@ -6,7 +6,7 @@
 import type { Connection } from './parse/connections';
 import type { Invitation } from './parse/invitations';
 import type { QuestionSpec, RowResult } from './spec/types';
-import { stateFor } from './spec/compile';
+import { stateFor, unionFields } from './spec/compile';
 import { bucketFor, tierFor, type ConnectionTier, type InvitationBucket, type TierInput } from './tiers';
 import type { Thresholds } from './spec/types';
 
@@ -20,26 +20,33 @@ export function fullName(first: string, last: string): string {
   return [first, last].filter(Boolean).join(' ').trim();
 }
 
+/**
+ * Every contract field of a row, unfiltered. One definition, used both for what
+ * gets stored for a later re-run and for what a question may ask about, so the
+ * two cannot drift.
+ */
+export function connectionFields(c: Connection): Record<string, string> {
+  return {
+    position: c.position,
+    company: c.company,
+    connected_for: c.connected_for,
+    name_suffixes: c.name_suffixes ?? '',
+  };
+}
+
+export function invitationFields(i: Invitation): Record<string, string> {
+  return { name: i.name, message: i.message, invitation_age: i.invitation_age };
+}
+
 /** Only the contract fields the enabled questions asked for. */
 export function connectionState(c: Connection, questions: QuestionSpec[]) {
-  const fields = [...new Set(questions.filter((q) => q.enabled).flatMap((q) => q.fields))];
-  return stateFor(
-    {
-      position: c.position,
-      company: c.company,
-      connected_for: c.connected_for,
-      name_suffixes: c.name_suffixes,
-    },
-    fields,
-  );
+  const fields = unionFields(questions);
+  return stateFor(connectionFields(c), fields);
 }
 
 export function invitationState(i: Invitation, questions: QuestionSpec[]) {
-  const fields = [...new Set(questions.filter((q) => q.enabled).flatMap((q) => q.fields))];
-  return stateFor(
-    { name: i.name, message: i.message, invitation_age: i.invitation_age },
-    fields,
-  );
+  const fields = unionFields(questions);
+  return stateFor(invitationFields(i), fields);
 }
 
 export function tierOfConnection(
