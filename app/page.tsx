@@ -8,12 +8,10 @@ import Tiles from '@/components/Tiles';
 import AvatarGrid, { type GridItem } from '@/components/AvatarGrid';
 import VerifyingPanel, { type PanelRow } from '@/components/VerifyingPanel';
 import { parseConnections, type ConnectionsParse } from '@/lib/parse/connections';
-import {
-  joinWithConnections, noSignalInvitations, parseInvitations, scorableInvitations,
-  type InvitationsParse,
-} from '@/lib/parse/invitations';
+import InvitationsTab from '@/components/InvitationsTab';
+import { joinWithConnections, parseInvitations, type InvitationsParse } from '@/lib/parse/invitations';
 import { PRESETS, DEFAULT_PRESET_ID } from '@/lib/presets';
-import { startRun, costOf, type RunHandle, type RunProgress } from '@/lib/run';
+import { startRun, type RunHandle, type RunProgress } from '@/lib/run';
 import { fileKey, loadResults, setFlags, allFlags, setActiveFileKey } from '@/lib/store';
 import { connectionState, fullName, initialsOf, tierOfConnection } from '@/lib/rows';
 import { downloadCsv } from '@/lib/csv';
@@ -46,9 +44,11 @@ export default function Page() {
   const [search, setSearch] = useState('');
   const [flags, setLocalFlags] = useState<Record<string, { dmSent?: boolean; accepted?: boolean }>>({});
   const [key, setKey] = useState('');
+  const [invKey, setInvKey] = useState('');
   const handle = useRef<RunHandle | null>(null);
   const onLoadRef = useRef<(f: LoadedFile) => Promise<void>>(async () => {});
-  const [tick, setTick] = useState(0);
+  // Ticks only to force a repaint of the elapsed tile; the value is never read.
+  const [, setTick] = useState(0);
 
   const preset = useMemo(() => PRESETS.find((p) => p.id === presetId)!, [presetId]);
   const connQuestions = useMemo(
@@ -95,6 +95,7 @@ export default function Page() {
       const parsed = parseInvitations(f.text);
       if (!parsed) { setError('That file could not be read.'); return; }
       setInvFile(f); setInv(parsed);
+      setInvKey(await fileKey(f.text));
     }
   }, []);
 
@@ -280,6 +281,42 @@ export default function Page() {
         </div>
       )}
 
+      <nav className="mt-5 flex gap-6 border-b rule">
+        {(['connections', 'invitations'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className="-mb-px border-b-2 pb-2 text-sm uppercase tracking-wide"
+            style={{
+              borderColor: tab === t ? 'var(--accent)' : 'transparent',
+              color: tab === t ? 'var(--ink)' : 'var(--muted)',
+            }}
+          >
+            {t}
+          </button>
+        ))}
+      </nav>
+
+      {tab === 'invitations' ? (
+        inv ? (
+          <InvitationsTab
+            rows={joined?.rows ?? inv.rows}
+            fileKey={invKey}
+            preset={preset}
+            accepted={joined?.accepted ?? 0}
+            pending={joined?.pending ?? 0}
+          />
+        ) : (
+          <p className="mt-6 text-sm" style={{ color: 'var(--muted)' }}>
+            Load your Invitations.csv above to see this tab.
+          </p>
+        )
+      ) : !conn ? (
+        <p className="mt-6 text-sm" style={{ color: 'var(--muted)' }}>
+          Load your Connections.csv above to see this tab.
+        </p>
+      ) : (
+      <>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button
           onClick={running ? () => { handle.current?.[paused ? 'resume' : 'pause'](); setPaused(!paused); } : run}
@@ -397,6 +434,9 @@ export default function Page() {
           </p>
         )}
       </div>
+
+      </>
+      )}
 
       <footer className="mt-10 border-t pt-4 text-xs rule" style={{ color: 'var(--muted)' }}>
         Your files are read in this browser and never uploaded. Only the few fields your

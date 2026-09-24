@@ -7,7 +7,7 @@ import type { Connection } from './parse/connections';
 import type { Invitation } from './parse/invitations';
 import type { QuestionSpec, RowResult } from './spec/types';
 import { stateFor } from './spec/compile';
-import { tierFor, type ConnectionTier, type TierInput } from './tiers';
+import { bucketFor, tierFor, type ConnectionTier, type InvitationBucket, type TierInput } from './tiers';
 import type { Thresholds } from './spec/types';
 
 export function initialsOf(first: string, last: string): string {
@@ -51,6 +51,22 @@ export function tierOfConnection(
   if (!result || result.error) return undefined;
   const input: TierInput = { answers: result.answers, positionEmpty: c.position.trim() === '' };
   return tierFor(presetId, input, thresholds);
+}
+
+/**
+ * An invitation's bucket. A row with no message never had a Jev call, so it
+ * lands in "no signal" by the same rule the run loop uses to skip it.
+ */
+export function bucketOfInvitation(
+  presetId: string,
+  i: Invitation,
+  result: RowResult | undefined,
+  thresholds: Thresholds,
+): InvitationBucket {
+  const hasMessage = i.message.trim() !== '';
+  if (!hasMessage) return 'no_signal';
+  if (!result || result.error) return 'review';
+  return bucketFor(presetId, result.answers, true, thresholds);
 }
 
 export function countBy<T>(items: T[], key: (t: T) => string | undefined): Record<string, number> {

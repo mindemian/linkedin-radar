@@ -7,7 +7,7 @@
     "prebuild": "tsx scripts/check-contract.ts",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit --noUnusedLocals",
     "fixtures": "tsx scripts/make-fixtures.ts",
     "test": "tsx scripts/test.ts"
   },

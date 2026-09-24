@@ -12,7 +12,9 @@ import {
 import { normalizeProfileUrl } from '../lib/parse/urls';
 import { parseConnectedOn, parseSentAt } from '../lib/parse/dates';
 import { validateQuestions, hasBlockingError } from '../lib/spec/validate';
-import { tierFor, countTiers, sizeFit, finalRank, type TierInput } from '../lib/tiers';
+import { tierFor, countTiers, sizeFit, finalRank, bucketFor, type TierInput } from '../lib/tiers';
+import { bucketOfInvitation } from '../lib/rows';
+import type { Answer } from '../lib/spec/types';
 import { GRANT_CLIENTS, INNOVATION_ROLES, PRESETS } from '../lib/presets';
 import { questionHash, hashAll, staleness, describeStaleness } from '../lib/spec/hash';
 import { fork, forkName, isBuiltIn, importJson, exportJson } from '../lib/presets/fork';
@@ -332,6 +334,57 @@ check('a score never exceeds the ten-level limit the validator enforces',
 check('converting to the same type is a no-op', convert(roleQ, 'choice') === roleQ);
 check('no warning when nothing would be lost',
   describeLoss({ ...roleQ, type: 'noul', whenTrue: undefined, whenFalse: undefined } as any, 'choice') === null);
+
+console.log('\nINVITATION BUCKETS');
+{
+  const joinedAll = joinWithConnections(inv.rows, new Set(conn.rows.map((c) => c.urlKey)));
+  const sent = scorableInvitations(joinedAll.rows);
+  const quiet = noSignalInvitations(joinedAll.rows);
+  const incoming = joinedAll.rows.filter((r) => r.direction === 'INCOMING');
+
+  check('an invitation with no message is never sent for scoring',
+    sent.every((r) => r.message.trim() !== ''));
+  check('an outgoing invitation is never sent for scoring',
+    sent.every((r) => r.direction === 'INCOMING'));
+  check('scorable and no-signal together account for every incoming invitation',
+    sent.length + quiet.length === incoming.length,
+    `${sent.length} + ${quiet.length} vs ${incoming.length}`);
+  check('the no-signal list is newest first',
+    quiet.every((r, i) => i === 0 ||
+      (quiet[i - 1].sentAt?.getTime() ?? 0) >= (r.sentAt?.getTime() ?? 0)));
+
+  const th = GRANT_CLIENTS.thresholds;
+  const choice = (c: string, p: Record<string, number>): Answer =>
+    ({ type: 'choice', choice: c, confidence: p[c] ?? 1, probabilities: p });
+
+  check('a funding ask is accepted whatever the sender says about their level',
+    bucketFor('grant-clients',
+      { message_intent: choice('needs_grant_help', { needs_grant_help: 0.9 }),
+        self_described_seniority: choice('not_stated', { not_stated: 0.9 }) },
+      true, th) === 'accept');
+
+  check('a confident sales pitch is ignored',
+    bucketFor('grant-clients',
+      { message_intent: choice('wants_to_sell_me_something', { wants_to_sell_me_something: 0.92 }) },
+      true, th) === 'ignore');
+
+  check('an opening offered is accepted under the job-search preset',
+    bucketFor('innovation-roles',
+      { message_intent: choice('offering_opportunity', { offering_opportunity: 0.88 }) },
+      true, th) === 'accept');
+
+  const noNote = joinedAll.rows.find((r) => r.direction === 'INCOMING' && r.message.trim() === '')!;
+  check('a note-less invitation buckets as no signal even with answers present',
+    bucketOfInvitation('grant-clients', noNote, undefined, th) === 'no_signal');
+
+  const withNote = sent[0];
+  check('an unscored note with a message waits in Review, not Accept',
+    bucketOfInvitation('grant-clients', withNote, undefined, th) === 'review');
+
+  const buckets = sent.map((i) => bucketOfInvitation('grant-clients', i, undefined, th));
+  check('every bucket count sums back to the incoming total',
+    buckets.length + quiet.length === incoming.length);
+}
 
 console.log('\nSPEC VALIDATION');
 const good: QuestionSpec = {

@@ -93,6 +93,67 @@ await page.waitForTimeout(2500);
 const after = await page.locator('body').innerText();
 check('a reload resumes from storage rather than rescoring', /400 already scored/i.test(after), after.match(/[\d,]+ already scored/)?.[0]);
 
+console.log('\nINVITATIONS');
+await page.locator('input[aria-label="invitations file"]').setInputFiles(resolve(FIX, 'Invitations.csv'));
+await page.waitForTimeout(900);
+
+const connectionsBody = await page.locator('body').innerText();
+check('the connections tab is the one showing first', /Download Tier 1/i.test(connectionsBody));
+
+await page.getByRole('button', { name: /^invitations$/i }).click();
+await page.waitForTimeout(500);
+const invBody = await page.locator('body').innerText();
+check('switching tabs changes what is listed',
+  !/Download Tier 1/i.test(invBody) && /No signal/i.test(invBody));
+check('accepted and pending appear once both files are loaded', /accepted, .* still pending/i.test(invBody));
+check('the no-signal list says plainly that it is never scored',
+  /never sent for scoring/i.test(invBody));
+// innerText returns what CSS renders, and .label uppercases: match case-insensitively.
+const flatInv = invBody.replace(/\s+/g, ' ');
+check('outgoing invitations are listed separately and never scored',
+  /outgoing ·/i.test(flatInv) && /no scoring happens here/i.test(flatInv));
+
+// The rows the run is allowed to touch: count them off the button itself, then
+// assert the run never reads more than that.
+const notes = Number(invBody.match(/Read ([\d,]+) notes/i)?.[1]?.replace(/,/g, '') ?? -1);
+check('the run offers only the notes, not every invitation', notes > 0 && notes < 200, `${notes} notes`);
+
+const sentStates = [];
+page.on('request', async (r) => {
+  if (!r.url().includes('/api/score')) return;
+  try { sentStates.push(...(JSON.parse(r.postData() ?? '{}').rows ?? [])); } catch {}
+});
+
+await page.getByRole('button', { name: /Read .* notes/i }).click();
+await page.waitForFunction(
+  (n) => new RegExp(`ROWS READ\\s*${n.toLocaleString()}`, 'i').test(document.body.innerText),
+  notes, { timeout: 180000 },
+).catch(() => {});
+await page.waitForTimeout(1200);
+const ranBody = await page.locator('body').innerText();
+const readInv = Number(ranBody.match(/ROWS READ\s*([\d,]+)/i)?.[1]?.replace(/,/g, '') ?? 0);
+check('the invitations run completes', readInv === notes, `read ${readInv} of ${notes}`);
+check('no invitation with an empty message was ever sent for scoring',
+  sentStates.length > 0 && sentStates.every((r) => String(r.state?.message ?? '').trim() !== ''),
+  `${sentStates.length} rows sent`);
+check('exactly the scorable rows were sent', sentStates.length === notes,
+  `${sentStates.length} vs ${notes}`);
+
+const accept = Number(ranBody.match(/WORTH ACCEPTING\s*([\d,]+)/i)?.[1]?.replace(/,/g, '') ?? -1);
+check('the buckets filled in', accept >= 0 && /Accept \d+/.test(ranBody) && /Ignore \d+/.test(ranBody),
+  `accept=${accept}`);
+
+// The bucket chips must sum back to the notes read, with No signal accounted for separately.
+const chip = (name) => Number(ranBody.match(new RegExp(`${name} ([\\d,]+)`))?.[1]?.replace(/,/g, '') ?? 0);
+check('Accept, Review and Ignore sum to the notes scored',
+  chip('Accept') + chip('Review') + chip('Ignore') === notes,
+  `${chip('Accept')}+${chip('Review')}+${chip('Ignore')} vs ${notes}`);
+
+await page.getByRole('button', { name: /^connections$/i }).click();
+await page.waitForTimeout(400);
+check('switching back shows the connections tab again',
+  /Download Tier 1/i.test(await page.locator('body').innerText()));
+
 console.log('\nMETHODS');
 await page.goto(`${URL}/methods`, { waitUntil: 'networkidle' });
 const methods = await page.locator('body').innerText();

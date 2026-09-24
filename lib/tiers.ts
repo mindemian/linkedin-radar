@@ -17,6 +17,26 @@ export type InvitationBucket = 'accept' | 'review' | 'ignore' | 'no_signal';
 /** Organization types this ICP rules out regardless of how grant-hungry they are. */
 export const EXCLUDED_COMPANY_TYPES = ['large_educational_institution'];
 
+export const BUCKET_LABELS: Record<InvitationBucket, string> = {
+  accept: 'Accept',
+  review: 'Review',
+  ignore: 'Ignore',
+  no_signal: 'No signal',
+};
+
+/** Seniority options that count as senior. Both presets share the scale. */
+export const SENIOR_BUCKETS = ['c_level_or_owner', 'director_or_vp'] as const;
+
+/**
+ * Which stated intents are worth accepting, per preset. Grant clients want to
+ * hear from someone with a funding problem; the job search wants to hear about
+ * an opening. Neither wants a pitch.
+ */
+const GOOD_INTENTS: Record<string, readonly string[]> = {
+  'grant-clients': ['genuine_networking', 'needs_grant_help', 'fan_or_learner'],
+  'innovation-roles': ['genuine_networking', 'offering_opportunity', 'fan_or_learner'],
+};
+
 export const TIER_LABELS: Record<ConnectionTier, string> = {
   tier1: 'Tier 1',
   tier2: 'Tier 2',
@@ -193,4 +213,23 @@ export function countTiers(
   };
   for (const r of rows) counts[tierFor(presetId, r, th)] += 1;
   return counts;
+}
+
+/**
+ * Preset-aware wrapper over invitationBucketFor, so the screen never has to
+ * know which intent names a preset happens to use.
+ */
+export function bucketFor(
+  presetId: string,
+  answers: Record<string, Answer> | undefined,
+  hasMessage: boolean,
+  th: Thresholds,
+): InvitationBucket {
+  return invitationBucketFor(
+    answers,
+    hasMessage,
+    SENIOR_BUCKETS,
+    th,
+    GOOD_INTENTS[presetId] ?? GOOD_INTENTS['grant-clients'],
+  );
 }
